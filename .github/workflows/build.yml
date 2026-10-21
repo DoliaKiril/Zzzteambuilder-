@@ -23,25 +23,50 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Package HTML/JS into Android WebView APK via Capacitor
+      - name: Accept Android SDK Licenses & Build APK via Capacitor
         run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          fi
+
+          rm -rf www android package.json package-lock.json capacitor.config.json capacitor.config.ts
           mkdir -p www
-          cp index.html www/
+
+          if [ -f "index.html" ]; then
+            cp index.html www/
+          else
+            FOUND_HTML=$(find . -maxdepth 3 -name "index.html" -not -path "./www/*" | head -n 1)
+            if [ -n "$FOUND_HTML" ]; then cp "$FOUND_HTML" www/index.html; fi
+          fi
+
           for f in db_mechanics.js db_equipment.js db_agents.js db_bosses.js; do
-            if [ -f "$f" ]; then cp "$f" www/; fi
+            if [ -f "$f" ]; then
+              cp "$f" www/
+            else
+              FOUND_DB=$(find . -maxdepth 3 -name "$f" -not -path "./www/*" | head -n 1)
+              if [ -n "$FOUND_DB" ]; then cp "$FOUND_DB" "www/$f"; fi
+            fi
           done
-          cat << 'EOF' > package.json
+
+          cat << 'PKG_EOF' > package.json
           {
             "name": "zzz-synergy-helper",
             "version": "3.3.0",
             "private": true
           }
-          EOF
+          PKG_EOF
+
+          cat << 'CAP_EOF' > capacitor.config.json
+          {
+            "appId": "com.proxy.zzzsynergy",
+            "appName": "ZZZ Phaethon OS",
+            "webDir": "www"
+          }
+          CAP_EOF
+
           npm install @capacitor/core@^7.0.0 @capacitor/cli@^7.0.0 @capacitor/android@^7.0.0
-          npx cap init "ZZZ Phaethon OS" "com.proxy.zzzsynergy" --web-dir www
           npx cap add android
           npx cap copy android
           sed -i 's/android:configChanges="/android:screenOrientation="sensorLandscape" android:configChanges="/g' android/app/src/main/AndroidManifest.xml
