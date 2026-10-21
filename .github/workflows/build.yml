@@ -1,0 +1,56 @@
+name: Build ZZZ Synergy Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Package HTML/JS into Android WebView APK via Capacitor
+        run: |
+          mkdir -p www
+          cp index.html www/
+          for f in db_mechanics.js db_equipment.js db_agents.js db_bosses.js; do
+            if [ -f "$f" ]; then cp "$f" www/; fi
+          done
+          cat << 'EOF' > package.json
+          {
+            "name": "zzz-synergy-helper",
+            "version": "3.3.0",
+            "private": true
+          }
+          EOF
+          npm install @capacitor/core@^7.0.0 @capacitor/cli@^7.0.0 @capacitor/android@^7.0.0
+          npx cap init "ZZZ Phaethon OS" "com.proxy.zzzsynergy" --web-dir www
+          npx cap add android
+          npx cap copy android
+          sed -i 's/android:configChanges="/android:screenOrientation="sensorLandscape" android:configChanges="/g' android/app/src/main/AndroidManifest.xml
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload Ready-to-Install APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZZZ-Synergy-Helper-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
